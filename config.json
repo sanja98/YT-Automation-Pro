@@ -1,0 +1,7 @@
+{
+  "niche": "Psychology Facts",
+  "total_shorts": 1,
+  "video_style": "Cinematic",
+  "timer_seconds": 0,
+  "prompt_template": "Write a 30-second viral script about '{topic}' (Psychology Facts). Format: Hook (3s), Body (22s), Call to Action (5s). Provide it in a JSON list where each item is one sentence. Keep it mysterious and engaging."
+}
