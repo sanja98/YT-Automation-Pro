@@ -31,30 +31,32 @@ def draw_overlay(text, timer=None, is_answer=False, hint=None):
     draw = ImageDraw.Draw(img)
     f_p = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
     
-    # Text wrap and Draw
     font_q = ImageFont.truetype(f_p, 80)
     font_t = ImageFont.truetype(f_p, 200)
     font_h = ImageFont.truetype(f_p, 50)
 
-    # Dark overlay for text readability
+    # Dark overlay box
     draw.rectangle([50, 400, 1030, 1500], fill=(0, 0, 0, 180))
     
-    # Draw Question or Answer
     y = 600
     display_text = f"ANSWER: {text}" if is_answer else text
     lines = textwrap.wrap(display_text, width=20)
+    
     for line in lines:
-        w, h = draw.textsize(line, font=font_q)
+        # Naya method for text centering
+        left, top, right, bottom = draw.textbbox((0, 0), line, font=font_q)
+        w = right - left
+        h = bottom - top
         draw.text(((W-w)/2, y), line, fill=(255, 255, 255), font=font_q)
-        y += h + 30
+        y += h + 50
 
     if hint and not is_answer:
-        hw, hh = draw.textsize(f"Hint: {hint}", font=font_h)
-        draw.text(((W-hw)/2, 1300), f"Hint: {hint}", fill=(255, 255, 100), font=font_h)
+        l, t, r, b = draw.textbbox((0, 0), f"Hint: {hint}", font=font_h)
+        draw.text(((W-(r-l))/2, 1350), f"Hint: {hint}", fill=(255, 255, 100), font=font_h)
 
     if timer and not is_answer:
-        tw, th = draw.textsize(str(timer), font=font_t)
-        draw.text(((W-tw)/2, 1000), str(timer), fill=(255, 50, 50), font=font_t)
+        l, t, r, b = draw.textbbox((0, 0), str(timer), font=font_t)
+        draw.text(((W-(r-l))/2, 1050), str(timer), fill=(255, 50, 50), font=font_t)
 
     img.save("frame.png")
     return "frame.png"
