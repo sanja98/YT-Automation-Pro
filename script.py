@@ -1,8 +1,12 @@
 import os, json, requests, random, textwrap, subprocess, time, shutil
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-import moviepy.editor as mp
 
+# 🔥 YE FIX HAI: MoviePy aur Pillow ke jhagde ko khatam karne ke liye
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.LANCZOS
+# -----------------------------------------------------------
+
+import moviepy.editor as mp
 # 🔐 Config & Env
 KEYS = [os.environ.get('KEY1')]
 PEXELS_KEY = os.environ.get('PEXELS_API_KEY')
