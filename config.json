@@ -1,7 +1,7 @@
 {
   "subject": "Riddles",
   "total_questions": 1,
-  "timer_seconds": 10,
+  "timer_seconds": 7,
   "pexels_query": "dark aesthetic, mysterious, night, abstract",
   "prompt_template": "Create 1 mysterious and engaging riddle in English for the topic '{topic}'. Provide a Hint and the Answer. Return as a strictly formatted JSON object with keys: 'question', 'hint', 'answer'. No markdown."
 }
