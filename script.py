@@ -1,9 +1,9 @@
 import os, json, requests, random, textwrap, subprocess, time, shutil
 from PIL import Image, ImageDraw, ImageFont
 import moviepy.editor as mp
-import moviepy.video.fx.all as vfx  # Brightness fix ke liye
+import moviepy.video.fx.all as vfx
 
-# 🔥 Pillow Fix
+# 🔥 Pillow Fix for MoviePy
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.LANCZOS
 
@@ -15,9 +15,9 @@ USER_ID = os.environ.get('USER_ID')
 
 def get_pexels_video(query):
     headers = {'Authorization': PEXELS_KEY}
-    search_url = f"https://api.pexels.com/videos/search?query={query}&per_page=10&orientation=portrait"
+    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
     try:
-        r = requests.get(search_url, headers=headers).json()
+        r = requests.get(url, headers=headers).json()
         video_data = random.choice(r['videos'])['video_files']
         video_url = next(v['link'] for v in video_data if v['width'] >= 720)
         with requests.get(video_url, stream=True) as v:
@@ -31,53 +31,51 @@ def draw_overlay(text, timer=None, is_answer=False, hint=None):
     img = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     f_p = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
-    
     font_q, font_t, font_h = ImageFont.truetype(f_p, 60), ImageFont.truetype(f_p, 120), ImageFont.truetype(f_p, 45)
 
-    # ⬛ Central Box
-    draw.rectangle([50, 500, 1030, 1400], fill=(0, 0, 0, 190))
+    # ⬛ Central Box (Darkened for better contrast)
+    draw.rectangle([50, 500, 1030, 1400], fill=(0, 0, 0, 195))
     
     y = 550
     display_text = f"ANSWER:\n{text}" if is_answer else text
-    for line in textwrap.wrap(display_text, width=28):
+    for line in textwrap.wrap(display_text, width=26):
         l, t, r, b = draw.textbbox((0, 0), line, font=font_q)
-        draw.text(((W-(r-l))/2, y), line, fill=(255, 255, 255), font=font_q); y += (b-t) + 40
+        draw.text(((W-(r-l))/2, y), line, fill=(255, 255, 255), font=font_q)
+        y += (b-t) + 45
 
-    # ⏲️ Top-Right Timer Circle
+    # ⏲️ Top-Right Timer Circle (As requested)
     if timer and not is_answer:
         draw.ellipse([850, 100, 1000, 250], fill=(255, 60, 60, 220))
         l, t, r, b = draw.textbbox((0, 0), str(timer), font=font_t)
         draw.text((850+(150-(r-l))/2, 100+(150-(b-t))/2), str(timer), fill=(255, 255, 255), font=font_t)
 
-    # 📏 Progress Bar (Timer ke saath sync)
+    # 📏 Progress Bar (Sync with Timer)
     if timer and not is_answer:
-        # 5 second ke hisaab se width calculate karna
         progress_w = int((timer / 5) * 980)
         draw.rectangle([50, 1420, 50 + progress_w, 1435], fill=(255, 60, 60))
 
     # 💡 Hint (Bottom Safe Area)
     if hint and not is_answer:
         h_y = 1450
-        for line in textwrap.wrap(f"Hint: {hint}", width=35):
-            l, t, r, b = draw.textbbox((0, 0), line, font=font_h)
-            draw.text(((W-(r-l))/2, h_y), line, fill=(255, 255, 100), font=font_h); h_y += (b-t) + 20
+        for h_line in textwrap.wrap(f"Hint: {hint}", width=35):
+            l, t, r, b = draw.textbbox((0, 0), h_line, font=font_h)
+            draw.text(((W-(r-l))/2, h_y), h_line, fill=(255, 255, 120), font=font_h)
+            h_y += (b-t) + 20
 
     img.save("frame.png"); return "frame.png"
 
 def main():
     with open('config.json', 'r') as f: cfg = json.load(f)
-    if os.path.exists('topics.txt'):
-        with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
-    else: return
+    with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
     done = []
     if os.path.exists('processed.txt'):
         with open('processed.txt', 'r') as f: done = f.read().splitlines()
     topic = next((t for t in topics if t not in done), None)
     if not topic: print("All topics done!"); return
 
-    # 🚀 Gemini 3.1 Stable
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash:generateContent?key={KEYS[0]}"
-    prompt = f"Create a mysterious riddle about {topic}. Return ONLY a JSON: {{'question': '...', 'answer': '...', 'hint': '...', 'bg_keyword': 'search term for pexels related to this topic'}}"
+    # 🚀 NEW STABLE URL (Fixes 'candidates' Error)
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={KEYS[0]}"
+    prompt = f"Create a mysterious riddle about {topic}. Return ONLY a JSON: {{'question': '...', 'answer': '...', 'hint': '...', 'bg_keyword': 'search term for pexels'}}"
     
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -98,10 +96,10 @@ def main():
     subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', f"The answer is {data['answer']}", '--write-media', 'a.mp3'])
     subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'sine=f=1000:d=0.1', 'tick.mp3'])
 
-    # 🎨 Fix: Brightness using colorx (0.6 means 60% brightness)
+    # 🎨 Background FX (Brightness Fix)
     bg_clip = mp.VideoFileClip(bg_video).resize(height=1920).crop(x1=0, y1=0, x2=1080, y2=1920).fx(vfx.colorx, 0.6)
-    
     q_aud, a_aud, tick_aud = mp.AudioFileClip("q.mp3"), mp.AudioFileClip("a.mp3"), mp.AudioFileClip("tick.mp3")
+    
     clips = [mp.ImageClip(draw_overlay(data['question'], hint=data['hint'])).set_duration(q_aud.duration).set_audio(q_aud)]
     for i in range(5, 0, -1):
         clips.append(mp.ImageClip(draw_overlay(data['question'], timer=i, hint=data['hint'])).set_duration(1).set_audio(tick_aud))
@@ -110,9 +108,12 @@ def main():
     final_video = mp.CompositeVideoClip([bg_clip.loop(duration=sum(c.duration for c in clips)), mp.concatenate_videoclips(clips, method="compose")])
     final_video.write_videofile("riddle.mp4", fps=24, codec="libx264", audio_codec="aac", logger=None)
 
+    # 3. Send to Telegram Only (YouTube trial OFF as per request)
     with open("riddle.mp4", 'rb') as f:
         requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendVideo", data={'chat_id': USER_ID}, files={'video': f})
+    
     with open('processed.txt', 'a') as f: f.write(topic + "\n")
+    print(f"✅ Success: {topic}")
 
 if __name__ == "__main__":
     main()
