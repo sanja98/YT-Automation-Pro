@@ -14,7 +14,6 @@ USER_ID = os.environ.get('USER_ID')
 
 def get_pexels_video(query):
     headers = {'Authorization': PEXELS_KEY}
-    # Query ko thoda cinematic banane ke liye extra keywords
     search_url = f"https://api.pexels.com/videos/search?query={query}&per_page=10&orientation=portrait"
     try:
         r = requests.get(search_url, headers=headers).json()
@@ -33,26 +32,25 @@ def draw_overlay(text, timer=None, is_answer=False, hint=None):
     f_p = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
     
     font_q = ImageFont.truetype(f_p, 60)
-    font_t = ImageFont.truetype(f_p, 120) # Timer ko chota kiya for side position
+    font_t = ImageFont.truetype(f_p, 120) 
     font_h = ImageFont.truetype(f_p, 45)
 
-    # ⬛ Central Box (Pehle se wide aur transparent)
-    draw.rectangle([50, 500, 1030, 1400], fill=(0, 0, 0, 180))
+    # ⬛ Darkened Box for better contrast
+    draw.rectangle([50, 500, 1030, 1400], fill=(0, 0, 0, 190))
     
     y = 550
-    display_text = f"ANSWER: {text}" if is_answer else text
+    display_text = f"ANSWER:\n{text}" if is_answer else text
     for line in textwrap.wrap(display_text, width=28):
         l, t, r, b = draw.textbbox((0, 0), line, font=font_q)
         draw.text(((W-(r-l))/2, y), line, fill=(255, 255, 255), font=font_q)
         y += (b-t) + 40
 
-    # ⏲️ Timer (Top-Right Circle Style)
+    # ⏲️ Top-Right Timer Circle
     if timer and not is_answer:
-        draw.ellipse([850, 100, 1000, 250], fill=(255, 60, 60, 200))
+        draw.ellipse([850, 100, 1000, 250], fill=(255, 60, 60, 220))
         l, t, r, b = draw.textbbox((0, 0), str(timer), font=font_t)
         draw.text((850+(150-(r-l))/2, 100+(150-(b-t))/2), str(timer), fill=(255, 255, 255), font=font_t)
 
-    # 💡 Hint (Bottom safe area)
     if hint and not is_answer:
         h_y = 1450
         for line in textwrap.wrap(f"Hint: {hint}", width=35):
@@ -65,29 +63,53 @@ def draw_overlay(text, timer=None, is_answer=False, hint=None):
 
 def main():
     with open('config.json', 'r') as f: cfg = json.load(f)
-    with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
+    if os.path.exists('topics.txt'):
+        with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
+    else: return
+
     done = []
     if os.path.exists('processed.txt'):
         with open('processed.txt', 'r') as f: done = f.read().splitlines()
+    
     topic = next((t for t in topics if t not in done), None)
-    if not topic: return
+    if not topic: print("All topics done!"); return
 
-    # 1. Gemini Request (Riddle + BG Keyword)
+    # 1. Gemini Request with Error Handling
     prompt = f"Create a mysterious riddle about {topic}. Return ONLY a JSON: {{'question': '...', 'answer': '...', 'hint': '...', 'bg_keyword': 'search term for pexels related to this topic'}}"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={KEYS[0]}"
-    res = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}).json()
-    data = json.loads(res['candidates'][0]['content']['parts'][0]['text'].replace("```json", "").replace("```", "").strip())
+    
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}
+        ]
+    }
+    
+    res = requests.post(url, json=payload).json()
+    
+    # 🛑 Fix: Candidates check
+    if 'candidates' not in res or not res['candidates']:
+        print(f"Gemini Error for {topic}: {res}")
+        return
 
-    # 2. Dynamic Video
+    try:
+        raw_text = res['candidates'][0]['content']['parts'][0]['text']
+        data = json.loads(raw_text.replace("```json", "").replace("```", "").strip())
+    except Exception as e:
+        print(f"JSON Parse Error: {e}")
+        return
+
+    # 2. Assets & Rendering (Baki same logic)
     bg_video = get_pexels_video(data.get('bg_keyword', topic))
     if not bg_video: return
 
-    # 3. Audio & Sounds
     subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', data['question'], '--write-media', 'q.mp3'])
     subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', f"The answer is {data['answer']}", '--write-media', 'a.mp3'])
     subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'sine=f=1000:d=0.1', 'tick.mp3'])
 
-    # 4. Rendering
     bg_clip = mp.VideoFileClip(bg_video).resize(height=1920).crop(x1=0, y1=0, x2=1080, y2=1920).brightness(0.6)
     q_aud, a_aud, tick_aud = mp.AudioFileClip("q.mp3"), mp.AudioFileClip("a.mp3"), mp.AudioFileClip("tick.mp3")
     
@@ -99,11 +121,11 @@ def main():
     final_video = mp.CompositeVideoClip([bg_clip.loop(duration=sum(c.duration for c in clips)), mp.concatenate_videoclips(clips, method="compose")])
     final_video.write_videofile("riddle.mp4", fps=24, codec="libx264", audio_codec="aac", logger=None)
 
-    # 5. Telegram Only (YouTube disabled for now)
     with open("riddle.mp4", 'rb') as f:
         requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendVideo", data={'chat_id': USER_ID}, files={'video': f})
     
     with open('processed.txt', 'a') as f: f.write(topic + "\n")
+    print(f"✅ Success: {topic}")
 
 if __name__ == "__main__":
     main()
