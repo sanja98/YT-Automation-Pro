@@ -1,0 +1,53 @@
+name: YT-Shorts-Money-Printer
+
+on:
+  workflow_dispatch:        # Sirf button dabane par chalega
+  # schedule:
+  #   - cron: '0 */3 * * *'  # Har 3 ghante mein ek video (Optional)
+
+concurrency:
+  group: yt-shorts-group
+  cancel-in-progress: false 
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-liberation
+          # MoviePy ke liye imageio-ffmpeg bhi install karna zaroori hai
+          pip install edge-tts pydub moviepy==1.0.3 requests numpy Pillow scipy imageio-ffmpeg
+
+      - name: Run Video Engine
+        env:
+          KEY1: ${{ secrets.KEY1 }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          USER_ID: ${{ secrets.USER_ID }}
+        run: python -u script.py
+
+      - name: Save Progress
+        if: always()
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git stash || echo "No changes"
+          git pull origin main --rebase
+          git stash pop || echo "Nothing to pop"
+          git add processed.txt || exit 0
+          git commit -m "Video Generated: ${GITHUB_RUN_NUMBER}" || exit 0
+          git push origin main
