@@ -1,53 +1,47 @@
 name: YT-Shorts-Money-Printer
 
 on:
-  workflow_dispatch:        # Sirf button dabane par chalega
-  # schedule:
-  #   - cron: '0 */3 * * *'  # Har 3 ghante mein ek video (Optional)
-
-concurrency:
-  group: yt-shorts-group
-  cancel-in-progress: false 
+  workflow_dispatch: # Manual button ke liye
+  schedule:
+    - cron: '0 */6 * * *' # Har 6 ghante mein auto-run hone ke liye
 
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
+
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg fonts-liberation
-          # MoviePy ke liye imageio-ffmpeg bhi install karna zaroori hai
-          pip install edge-tts pydub moviepy==1.0.3 requests numpy "Pillow<10.0.0" scipy imageio-ffmpeg
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-liberation
 
-      - name: Run Video Engine
+      - name: Install Python Libraries
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts pydub moviepy==1.0.3 requests numpy "Pillow<10.0.0" scipy imageio-ffmpeg
+          pip install google-api-python-client google-auth-oauthlib google-auth
+
+      - name: Run Automation Script
         env:
           KEY1: ${{ secrets.KEY1 }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           USER_ID: ${{ secrets.USER_ID }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: python -u script.py
 
-      - name: Save Progress
-        if: always()
+      - name: Commit Processed Topics
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-          git stash || echo "No changes"
-          git pull origin main --rebase
-          git stash pop || echo "Nothing to pop"
-          git add processed.txt || exit 0
-          git commit -m "Video Generated: ${GITHUB_RUN_NUMBER}" || exit 0
-          git push origin main
+          git add processed.txt
+          git commit -m "Update processed topics" || echo "No changes to commit"
+          git push
