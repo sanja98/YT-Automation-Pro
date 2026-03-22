@@ -24,9 +24,7 @@ def get_pexels_video(query):
             with open("bg.mp4", 'wb') as f:
                 for chunk in v.iter_content(chunk_size=1024): f.write(chunk)
         return "bg.mp4"
-    except Exception as e:
-        print(f"Pexels Error: {e}")
-        return None
+    except: return None
 
 def draw_overlay(text, timer=None, is_answer=False, hint=None):
     W, H = (1080, 1920)
@@ -34,41 +32,46 @@ def draw_overlay(text, timer=None, is_answer=False, hint=None):
     draw = ImageDraw.Draw(img)
     f_p = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
     
-    # 🎨 Font Sizes
     font_q = ImageFont.truetype(f_p, 55)  
-    font_t = ImageFont.truetype(f_p, 200) 
-    font_h = ImageFont.truetype(f_p, 45)  
+    font_t = ImageFont.truetype(f_p, 250) # Bada Timer
+    font_h = ImageFont.truetype(f_p, 42)  # Thoda chota Hint font
 
-    # ⬛ Deep Black Semi-transparent Box
-    draw.rectangle([60, 400, 1020, 1500], fill=(0, 0, 0, 210))
+    # ⬛ Cinematic Box: thoda aur bada (height) taaki niche ka text fit aaye
+    draw.rectangle([70, 420, 1010, 1550], fill=(0, 0, 0, 215))
     
+    # 📝 Riddle/Question Positioning
     y = 480
     display_text = f"ANSWER:\n{text}" if is_answer else text
-    lines = textwrap.wrap(display_text, width=25) 
-    
+    lines = textwrap.wrap(display_text, width=24) 
     for line in lines:
         l, t, r, b = draw.textbbox((0, 0), line, font=font_q)
         draw.text(((W-(r-l))/2, y), line, fill=(255, 255, 255), font=font_q)
         y += (b-t) + 40
 
-    # ⏲️ Timer below text
+    # ⏲️ Timer Logic (Center of the box)
     if timer and not is_answer:
         l, t, r, b = draw.textbbox((0, 0), str(timer), font=font_t)
-        draw.text(((W-(r-l))/2, 1100), str(timer), fill=(255, 80, 80, 200), font=font_t)
+        draw.text(((W-(r-l))/2, 1000), str(timer), fill=(255, 60, 60, 180), font=font_t)
 
-    # 💡 Hint at bottom of box
+    # 💡 Hint Logic (Fixed positioning to avoid cutting)
     if hint and not is_answer:
-        l, t, r, b = draw.textbbox((0, 0), f"Hint: {hint}", font=font_h)
-        draw.text(((W-(r-l))/2, 1400), f"Hint: {hint}", fill=(255, 255, 100), font=font_h)
+        # Hint ko 2 lines mein wrap karna safe hai
+        hint_lines = textwrap.wrap(f"Hint: {hint}", width=35)
+        hy = 1380 # Upar shift kiya taaki niche se na kante
+        for h_line in hint_lines:
+            l, t, r, b = draw.textbbox((0, 0), h_line, font=font_h)
+            draw.text(((W-(r-l))/2, hy), h_line, fill=(255, 255, 120), font=font_h)
+            hy += (b-t) + 20
 
     img.save("frame.png")
     return "frame.png"
 
 def main():
-    # Load Config
     with open('config.json', 'r') as f: cfg = json.load(f)
-    with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
-    
+    if os.path.exists('topics.txt'):
+        with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
+    else: return
+
     done = []
     if os.path.exists('processed.txt'):
         with open('processed.txt', 'r') as f: done = f.read().splitlines()
@@ -76,53 +79,38 @@ def main():
     topic = next((t for t in topics if t not in done), None)
     if not topic: return
 
-    # 1. Gemini 3.1 Request
+    # 1. Gemini 3.1 Flash Lite
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key={KEYS[0]}"
-    payload = {
-        "contents": [{"parts": [{"text": cfg['prompt_template'].format(topic=topic)}]}],
-        "safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}]
-    }
-    
-    res = requests.post(url, json=payload).json()
+    payload = {"contents": [{"parts": [{"text": cfg['prompt_template'].format(topic=topic)}]}],
+               "safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}]}
     
     try:
+        res = requests.post(url, json=payload).json()
         raw_text = res['candidates'][0]['content']['parts'][0]['text']
-        json_str = raw_text.replace("```json", "").replace("```", "").strip()
-        data = json.loads(json_str)
-    except Exception as e:
-        print(f"Gemini Error: {e}")
-        return
+        data = json.loads(raw_text.replace("```json", "").replace("```", "").strip())
+    except: return
 
-    # 2. Pexels Video
+    # 2. Pexels & Audio
     bg_video = get_pexels_video(cfg['pexels_query'])
     if not bg_video: return
 
-    # 3. Voice
-    q_text = f"Here is a riddle for you. {data['question']}"
-    subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', q_text, '--write-media', 'q.mp3'])
-    a_text = f"The answer is {data['answer']}"
-    subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', a_text, '--write-media', 'a.mp3'])
+    subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', f"Riddle: {data['question']}", '--write-media', 'q.mp3'])
+    subprocess.run(['edge-tts', '--voice', 'en-IN-NeerjaNeural', '--text', f"The answer is {data['answer']}", '--write-media', 'a.mp3'])
 
-    # 4. Rendering
+    # 3. Video Rendering
     bg_clip = mp.VideoFileClip(bg_video).resize(height=1920).crop(x1=0, y1=0, x2=1080, y2=1920)
-    q_aud = mp.AudioFileClip("q.mp3")
-    a_aud = mp.AudioFileClip("a.mp3")
+    q_aud, a_aud = mp.AudioFileClip("q.mp3"), mp.AudioFileClip("a.mp3")
 
-    clips = []
-    clips.append(mp.ImageClip(draw_overlay(data['question'], hint=data['hint'])).set_duration(q_aud.duration).set_audio(q_aud))
-    
-    for i in range(cfg['timer_seconds'], 0, -1):
+    clips = [mp.ImageClip(draw_overlay(data['question'], hint=data['hint'])).set_duration(q_aud.duration).set_audio(q_aud)]
+    for i in range(cfg.get('timer_seconds', 5), 0, -1):
         clips.append(mp.ImageClip(draw_overlay(data['question'], timer=i, hint=data['hint'])).set_duration(1))
-    
     clips.append(mp.ImageClip(draw_overlay(data['answer'], is_answer=True)).set_duration(a_aud.duration + 2).set_audio(a_aud))
 
     final_video = mp.CompositeVideoClip([bg_clip.loop(duration=sum(c.duration for c in clips)), mp.concatenate_videoclips(clips, method="compose")])
     final_video.write_videofile("riddle.mp4", fps=24, codec="libx264", audio_codec="aac", logger=None)
 
-    # 5. Telegram
     with open("riddle.mp4", 'rb') as f:
         requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendVideo", data={'chat_id': USER_ID}, files={'video': f})
-    
     with open('processed.txt', 'a') as f: f.write(topic + "\n")
 
 if __name__ == "__main__":
