@@ -30,7 +30,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg fonts-liberation
           # MoviePy ke liye imageio-ffmpeg bhi install karna zaroori hai
-          pip install edge-tts pydub moviepy==1.0.3 requests numpy Pillow scipy imageio-ffmpeg
+          pip install edge-tts pydub moviepy==1.0.3 requests numpy "Pillow<10.0.0" scipy imageio-ffmpeg
 
       - name: Run Video Engine
         env:
