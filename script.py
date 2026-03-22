@@ -1,33 +1,11 @@
 import os, json, requests, random, textwrap, subprocess, time, shutil
 from PIL import Image, ImageDraw, ImageFont
 
-# 🔥 YE FIX HAI: MoviePy aur Pillow ke jhagde ko khatam karne ke liye
+# 🔥 Pillow Fix for MoviePy
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.LANCZOS
-# -----------------------------------------------------------
 
 import moviepy.editor as mp
-# 🔐 Config & Env
-KEYS = [os.environ.get('KEY1')]
-PEXELS_KEY = os.environ.get('PEXELS_API_KEY')
-TG_TOKEN = os.environ.get('TG_TOKEN')
-USER_ID = os.environ.get('USER_ID')
-
-def get_pexels_video(query):
-    headers = {'Authorization': PEXELS_KEY}
-    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
-    try:
-        r = requests.get(url, headers=headers).json()
-        video_data = random.choice(r['videos'])['video_files']
-        # HD quality video dhoondna
-        video_url = next(v['link'] for v in video_data if v['width'] >= 720)
-        with requests.get(video_url, stream=True) as v:
-            with open("bg.mp4", 'wb') as f:
-                for chunk in v.iter_content(chunk_size=1024): f.write(chunk)
-        return "bg.mp4"
-    except Exception as e:
-        print(f"Pexels Error: {e}")
-        return None
 
 def draw_overlay(text, timer=None, is_answer=False, hint=None):
     W, H = (1080, 1920)
@@ -35,36 +13,35 @@ def draw_overlay(text, timer=None, is_answer=False, hint=None):
     draw = ImageDraw.Draw(img)
     f_p = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
     
-    font_q = ImageFont.truetype(f_p, 80)
-    font_t = ImageFont.truetype(f_p, 200)
-    font_h = ImageFont.truetype(f_p, 50)
+    # 🎨 Colors & Fonts
+    font_q = ImageFont.truetype(f_p, 60) # Chota kiya taaki fit aaye
+    font_t = ImageFont.truetype(f_p, 250)
+    font_h = ImageFont.truetype(f_p, 45)
 
-    # Dark overlay box
-    draw.rectangle([50, 400, 1030, 1500], fill=(0, 0, 0, 180))
+    # ⬛ Semi-transparent Box (Centered)
+    draw.rectangle([80, 500, 1000, 1400], fill=(0, 0, 0, 190))
     
-    y = 600
-    display_text = f"ANSWER: {text}" if is_answer else text
-    lines = textwrap.wrap(display_text, width=20)
+    y = 550
+    display_text = f"ANSWER:\n{text}" if is_answer else text
+    # Width 25 rakha hai taaki lines choti rahein
+    lines = textwrap.wrap(display_text, width=25) 
     
     for line in lines:
-        # Naya method for text centering
-        left, top, right, bottom = draw.textbbox((0, 0), line, font=font_q)
-        w = right - left
-        h = bottom - top
-        draw.text(((W-w)/2, y), line, fill=(255, 255, 255), font=font_q)
-        y += h + 50
+        l, t, r, b = draw.textbbox((0, 0), line, font=font_q)
+        draw.text(((W-(r-l))/2, y), line, fill=(255, 255, 255), font=font_q)
+        y += (b-t) + 40
+
+    # ⏲️ Timer Logic (Bottom par rakha hai overlap hatane ke liye)
+    if timer and not is_answer:
+        l, t, r, b = draw.textbbox((0, 0), str(timer), font=font_t)
+        draw.text(((W-(r-l))/2, 1050), str(timer), fill=(255, 50, 50, 150), font=font_t)
 
     if hint and not is_answer:
         l, t, r, b = draw.textbbox((0, 0), f"Hint: {hint}", font=font_h)
-        draw.text(((W-(r-l))/2, 1350), f"Hint: {hint}", fill=(255, 255, 100), font=font_h)
-
-    if timer and not is_answer:
-        l, t, r, b = draw.textbbox((0, 0), str(timer), font=font_t)
-        draw.text(((W-(r-l))/2, 1050), str(timer), fill=(255, 50, 50), font=font_t)
+        draw.text(((W-(r-l))/2, 1320), f"Hint: {hint}", fill=(255, 255, 100), font=font_h)
 
     img.save("frame.png")
     return "frame.png"
-
 def main():
     with open('config.json', 'r') as f: cfg = json.load(f)
     with open('topics.txt', 'r') as f: topics = [t.strip() for t in f.readlines() if t.strip()]
