@@ -99,7 +99,7 @@ def main():
     subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'sine=f=1000:d=0.1', 'tick.mp3'])
 
     # 4. Rendering (Fixed Duration Error)
-    bg_clip = mp.VideoFileClip(bg_video).resize(height=1920).crop(x1=0, y1=0, x2=1080, y2=1920).fx(vfx.colorx, 0.6)
+    bg_clip = mp.VideoFileClip(bg_video).without_audio().resize(height=1920).crop(x1=0, y1=0, x2=1080, y2=1920).fx(vfx.colorx, 0.6)
     bg_clip = bg_clip.subclip(0, bg_clip.duration - 0.1)
     q_aud, a_aud, tick_aud = mp.AudioFileClip("q.mp3"), mp.AudioFileClip("a.mp3"), mp.AudioFileClip("tick.mp3")
     clips = [mp.ImageClip(draw_overlay(data['question'], hint=data['hint'])).set_duration(q_aud.duration).set_audio(q_aud)]
