@@ -34,3 +34,4 @@ Paleontology
 Mysterious Artifacts
 Literary Mystery
 The Haunted Artifact
+Ancient Grimoire
